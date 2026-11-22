@@ -41,7 +41,7 @@ header{display:flex;justify-content:space-between;align-items:end;gap:12px;flex-
 button,.btn{font:inherit;font-weight:500;text-decoration:none;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:9px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 button:hover,.btn:hover{border-color:var(--accent)}
 button:focus-visible,input:focus-visible,textarea:focus-visible,label.drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
-button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+button.primary,.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 button.ghost{background:transparent;border-color:transparent;color:var(--muted);padding:6px 8px}
 button.danger{color:var(--bad)}
 button:disabled{opacity:.5;cursor:default}
@@ -177,11 +177,12 @@ details.help li{margin:4px 0}
         <div class="panel" id="sendPanel" hidden>
           <strong id="sendTitle">Contacts ready</strong>
           <p class="sub" style="margin:0">Choose one way to add them. iOS then shows <b>Add All Contacts</b>.</p>
+          <p class="sub" id="sendNames" style="margin:0;font-size:.85rem"></p>
           <div class="row">
-            <button class="primary" id="shareBtn">Share to Contacts…</button>
-            <a class="btn" id="openSafari" target="_blank" rel="noopener">Open in Safari</a>
+            <a class="btn primary" id="openSafari" target="_blank" rel="noopener">Open in Safari</a>
+            <button id="shareBtn">Share…</button>
           </div>
-          <p class="sub" style="margin:0;font-size:.85rem"><b>Share:</b> pick <b>Contacts</b> in the share sheet. If it isn't listed, pick <b>Save to Files</b>, then open the file in the Files app.<br><b>Open in Safari:</b> Safari shows the contacts with <b>Add All Contacts</b>.</p>
+          <p class="sub" style="margin:0;font-size:.85rem">Safari shows the contacts. Tap <b>Add All Contacts</b>, then come back here.</p>
           <div class="row">
             <button id="addedYes">They're in Contacts: mark as added</button>
             <button class="ghost" id="addedClose">Close</button>
@@ -426,6 +427,8 @@ function renderBank(){
 }
 function updateSel(){
   const n=state.selected.size;
+  const key=[...state.selected].sort().join(",");
+  if (key!==updateSel.last){ updateSel.last=key; $("sendPanel").hidden=true; }
   $("selInfo").textContent = n ? `${n} selected.` : state.cards.length ? `Nothing selected: buttons use all ${state.cards.length} cards.` : "";
   ["expIphone","expCsv"].forEach(id=>$(id).disabled=!state.cards.length);
 }
@@ -449,6 +452,9 @@ $("expIphone").onclick=async()=>{
     send.ids=ids;
     send.file=new File([text],"AmCard contacts.vcf",{type:"text/vcard"});
     $("openSafari").href=url;
+    $("openSafari").target="amcard-"+Date.now(); // a fresh Safari tab every time, never an old one
+    const names=list.map(fullName);
+    $("sendNames").textContent = names.length<=4 ? names.join(", ") : names.slice(0,3).join(", ")+` and ${names.length-3} more`;
     $("sendTitle").textContent=`${ids.length} contact${ids.length>1?"s":""} ready`;
     $("shareBtn").hidden = !(navigator.canShare && navigator.canShare({files:[send.file]}));
     $("sendPanel").hidden=false; $("sendPanel").scrollIntoView({behavior:"smooth",block:"center"});
