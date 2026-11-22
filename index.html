@@ -38,8 +38,8 @@ h2{font-size:1.15rem}
 header{display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap}
 .count{font-family:var(--mono);font-size:.85rem;color:var(--muted)}
 .label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
-button{font:inherit;font-weight:500;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:9px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
-button:hover{border-color:var(--accent)}
+button,.btn{font:inherit;font-weight:500;text-decoration:none;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:9px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+button:hover,.btn:hover{border-color:var(--accent)}
 button:focus-visible,input:focus-visible,textarea:focus-visible,label.drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
 button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 button.ghost{background:transparent;border-color:transparent;color:var(--muted);padding:6px 8px}
@@ -174,14 +174,27 @@ details.help li{margin:4px 0}
           <button id="expCsv">Download CSV (Google)</button>
           <span class="status" id="selInfo"></span>
         </div>
+        <div class="panel" id="sendPanel" hidden>
+          <strong id="sendTitle">Contacts ready</strong>
+          <p class="sub" style="margin:0">Choose one way to add them. iOS then shows <b>Add All Contacts</b>.</p>
+          <div class="row">
+            <button class="primary" id="shareBtn">Share to Contacts…</button>
+            <a class="btn" id="openSafari" target="_blank" rel="noopener">Open in Safari</a>
+          </div>
+          <p class="sub" style="margin:0;font-size:.85rem"><b>Share:</b> pick <b>Contacts</b> in the share sheet. If it isn't listed, pick <b>Save to Files</b>, then open the file in the Files app.<br><b>Open in Safari:</b> Safari shows the contacts with <b>Add All Contacts</b>.</p>
+          <div class="row">
+            <button id="addedYes">They're in Contacts: mark as added</button>
+            <button class="ghost" id="addedClose">Close</button>
+          </div>
+        </div>
         <div class="bank" id="bank"><div class="empty"><strong>Loading your cards…</strong></div></div>
         <details class="help">
           <summary>How adding to Contacts works</summary>
           <ol>
             <li>Turn on <b>Settings → [your name] → iCloud → Contacts</b> on your iPhone, so new contacts are backed up to iCloud.</li>
             <li>Select cards (or none for all) and tap <b>Add to iPhone Contacts</b>.</li>
-            <li>iOS shows the contacts. Tap <b>Add All Contacts</b> (or <b>Create New Contact</b> for one card).</li>
-            <li>The list marks those cards as added, so next time you can pick <b>Select not yet added</b>.</li>
+            <li>In the panel that appears, tap <b>Share to Contacts…</b> or <b>Open in Safari</b>, then tap <b>Add All Contacts</b>.</li>
+            <li>Back in AmCard, tap <b>mark as added</b>. Next time, <b>Select not yet added</b> picks only new cards.</li>
           </ol>
         </details>
       </section>
@@ -422,18 +435,38 @@ $("selNone").onclick=()=>{ state.selected.clear(); renderBank(); };
 const chosen = () => state.selected.size ? state.cards.filter(c=>state.selected.has(c.id)) : state.cards;
 
 /* ---------- export ---------- */
+// Sending contacts: the app prepares a .vcf, then the user hands it to iOS by sharing it
+// (share sheet → Contacts / Save to Files) or by opening its link in Safari. The file is fetched
+// before the panel's buttons are tapped, because iOS only opens the share sheet straight from a tap.
+const send = { ids: [], file: null };
 $("expIphone").onclick=async()=>{
   const list=chosen(); if(!list.length) return;
   $("expIphone").disabled=true;
   try {
-    const { url } = await api("/export",{method:"POST",body:JSON.stringify({ids:list.map(c=>c.id)})});
-    state.selected.clear();
-    // Opening the .vcf link hands it to iOS, which shows "Add All Contacts".
-    window.location.href = url;
-    setTimeout(loadCards, 4000);
+    const ids=list.map(c=>c.id);
+    const { url } = await api("/export",{method:"POST",body:JSON.stringify({ids})});
+    const text = await (await fetch(url)).text();
+    send.ids=ids;
+    send.file=new File([text],"AmCard contacts.vcf",{type:"text/vcard"});
+    $("openSafari").href=url;
+    $("sendTitle").textContent=`${ids.length} contact${ids.length>1?"s":""} ready`;
+    $("shareBtn").hidden = !(navigator.canShare && navigator.canShare({files:[send.file]}));
+    $("sendPanel").hidden=false; $("sendPanel").scrollIntoView({behavior:"smooth",block:"center"});
   } catch(e){ if (e.message!=="locked") toast("Couldn't prepare contacts: "+e.message); }
   finally { $("expIphone").disabled=false; }
 };
+$("shareBtn").onclick=async()=>{
+  try { await navigator.share({files:[send.file]}); }
+  catch(e){ if (e.name!=="AbortError") toast("Sharing didn't work here. Try Open in Safari."); }
+};
+$("addedYes").onclick=async()=>{
+  try {
+    await api("/cards/added",{method:"POST",body:JSON.stringify({ids:send.ids})});
+    $("sendPanel").hidden=true; state.selected.clear(); await loadCards();
+    toast(`Marked ${send.ids.length} card${send.ids.length>1?"s":""} as added`);
+  } catch(e){ if (e.message!=="locked") toast("Couldn't update: "+e.message); }
+};
+$("addedClose").onclick=()=>{ $("sendPanel").hidden=true; };
 $("expCsv").onclick=()=>{
   const list=chosen(); if(!list.length) return;
   const H=["First Name","Last Name","Organization Name","Organization Department","Organization Title","Phone 1 - Label","Phone 1 - Value","Phone 2 - Label","Phone 2 - Value","E-mail 1 - Label","E-mail 1 - Value","E-mail 2 - Label","E-mail 2 - Value","Website 1 - Value","Address 1 - Formatted","Notes","Labels"];
