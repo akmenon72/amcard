@@ -181,8 +181,9 @@ details.help li{margin:4px 0}
           <div class="row">
             <a class="btn primary" id="openSafari" target="_blank" rel="noopener">Open in Safari</a>
             <button id="shareBtn">Share…</button>
+            <a class="btn" id="dlVcf" download="amcard-contacts.vcf">Download .vcf</a>
           </div>
-          <p class="sub" style="margin:0;font-size:.85rem">Safari shows the contacts. Tap <b>Add All Contacts</b>, then come back here.</p>
+          <p class="sub" style="margin:0;font-size:.85rem"><b>One contact:</b> Open in Safari, then Create New Contact.<br><b>Several on iPhone:</b> Share… → Save to Files, then open the file in the Files app and tap Add All Contacts.<br><b>Several on a computer:</b> Download .vcf, then import it at icloud.com/contacts (+ → Import Contact).</p>
           <div class="row">
             <button id="addedYes">They're in Contacts: mark as added</button>
             <button class="ghost" id="addedClose">Close</button>
@@ -451,6 +452,8 @@ $("expIphone").onclick=async()=>{
     const text = await (await fetch(url)).text();
     send.ids=ids;
     send.file=new File([text],"AmCard contacts.vcf",{type:"text/vcard"});
+    if ($("dlVcf").href.startsWith("blob:")) URL.revokeObjectURL($("dlVcf").href);
+    $("dlVcf").href=URL.createObjectURL(send.file);
     $("openSafari").href=url;
     $("openSafari").target="amcard-"+Date.now(); // a fresh Safari tab every time, never an old one
     const names=list.map(fullName);
